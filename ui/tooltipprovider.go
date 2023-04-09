@@ -40,6 +40,12 @@ type ToolTipProvider struct {
 	toolTipLayer *fyne.Container
 }
 
+type ToolTippableObject interface {
+	widget.BaseWidget
+
+	Object() fyne.Widget
+}
+
 func NewToolTipProvider() *ToolTipProvider {
 	toolTip := canvas.NewText("", theme.ForegroundColor())
 	toolTip.TextSize = theme.CaptionTextSize()
@@ -55,10 +61,17 @@ func (t *ToolTipProvider) ToolTipLayer() fyne.CanvasObject {
 	return t.toolTipLayer
 }
 
-func (t *ToolTipProvider) MakeToolTippable(obj fyne.CanvasObject, toolTipFn func() string) fyne.CanvasObject {
-	toolTippable := &toolTippableObject{object: obj, toolTipFn: toolTipFn, provider: t}
+func (t *ToolTipProvider) MakeToolTippable(wid fyne.Widget, toolTipFn func() string) fyne.Widget {
+	toolTippable := &toolTippableObject{object: wid, toolTipFn: toolTipFn, provider: t}
 	toolTippable.ExtendBaseWidget(toolTippable)
 	return toolTippable
+}
+
+func (t *ToolTipProvider) updateToolTip(text string, position fyne.Position) {
+	t.toolTip.Text = text
+	t.toolTip.Resize(fyne.MeasureText(text, theme.CaptionTextSize(), fyne.TextStyle{}))
+	t.toolTip.Move(position)
+	t.toolTip.Refresh()
 }
 
 func (t *ToolTipProvider) newWaitToolTipFn() func() {
@@ -78,11 +91,11 @@ func (t *ToolTipProvider) newWaitToolTipFn() func() {
 			now := time.Now()
 			if now.After(t.showToolTipAfter) {
 				// show tool tip
-				t.toolTip.Text = t.pendingToolTipObj.toolTipFn()
+				t.updateToolTip(t.pendingToolTipObj.toolTipFn(), fyne.NewPos(0, 0))
 				t.pendingToolTipObj = nil
 				t.pendingToolTipFn = nil
+				t.lastToolTipShownAt = now
 				t.mutex.Unlock()
-				t.toolTip.Refresh()
 				return
 			} else {
 				// wait to check after the next showToolTipAfter time
@@ -97,9 +110,13 @@ func (t *ToolTipProvider) newWaitToolTipFn() func() {
 type toolTippableObject struct {
 	widget.BaseWidget
 
-	object    fyne.CanvasObject
+	object    fyne.Widget
 	toolTipFn func() string
 	provider  *ToolTipProvider
+}
+
+func (t *toolTippableObject) Object() fyne.CanvasObject {
+	return t.object
 }
 
 var _ desktop.Hoverable = (*toolTippableObject)(nil)
@@ -124,29 +141,15 @@ func (t *toolTippableObject) MouseIn(*desktop.MouseEvent) {
 }
 
 func (t *toolTippableObject) MouseOut() {
-	var needRefresh bool
-
 	t.provider.mutex.Lock()
-	t.provider.pendingToolTipObj = nil
-	if t.provider.toolTip.Text != "" {
-		needRefresh = true
-		t.provider.toolTip.Text = ""
-	}
-	t.provider.mutex.Unlock()
+	defer t.provider.mutex.Unlock()
 
-	if needRefresh {
-		t.provider.toolTip.Refresh()
-	}
+	t.provider.updateToolTip("", fyne.NewPos(0, 0))
+	t.provider.pendingToolTipObj = nil
 }
 
 func (t *toolTippableObject) MouseMoved(*desktop.MouseEvent) {}
 
 func (t *toolTippableObject) CreateRenderer() fyne.WidgetRenderer {
-	if t.object == nil {
-		return nil
-	}
-	if o, ok := t.object.(fyne.Widget); ok {
-		return o.CreateRenderer()
-	}
-	return widget.NewSimpleRenderer(t.object)
+	return t.object.CreateRenderer()
 }

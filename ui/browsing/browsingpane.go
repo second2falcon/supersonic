@@ -43,7 +43,8 @@ type CanShowNowPlaying interface {
 type BrowsingPane struct {
 	widget.BaseWidget
 
-	app *backend.App
+	app        *backend.App
+	controller *controller.Controller
 
 	curPage Page
 
@@ -60,8 +61,8 @@ type BrowsingPane struct {
 	container        *fyne.Container
 }
 
-func NewBrowsingPane(app *backend.App) *BrowsingPane {
-	b := &BrowsingPane{app: app}
+func NewBrowsingPane(app *backend.App, controller *controller.Controller) *BrowsingPane {
+	b := &BrowsingPane{app: app, controller: controller}
 	b.ExtendBaseWidget(b)
 	b.back = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), b.GoBack)
 	b.forward = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), b.GoForward)
@@ -111,18 +112,27 @@ func (b *BrowsingPane) AddSettingsMenuItem(label string, action func()) {
 }
 
 func (b *BrowsingPane) AddNavigationButton(iconRes fyne.Resource, action func()) {
-	b.navBtnsContainer.Add(widget.NewButtonWithIcon("", iconRes, action))
+	b.navBtnsContainer.Add(
+		b.controller.ToolTipProvider.MakeToolTippable(
+			widget.NewButtonWithIcon("", iconRes, action),
+			func() string { return "button" },
+		),
+	)
+}
+
+type Objectable interface {
+	Object() fyne.CanvasObject
 }
 
 func (b *BrowsingPane) DisableNavigationButtons() {
 	for _, obj := range b.navBtnsContainer.Objects {
-		obj.(*widget.Button).Disable()
+		obj.(Objectable).Object().(fyne.Disableable).Disable()
 	}
 }
 
 func (b *BrowsingPane) EnableNavigationButtons() {
 	for _, obj := range b.navBtnsContainer.Objects {
-		obj.(*widget.Button).Enable()
+		obj.(Objectable).Object().(fyne.Disableable).Enable()
 	}
 }
 

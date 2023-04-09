@@ -25,11 +25,17 @@ type ReloadFunc func()
 
 type CurPageFunc func() Route
 
+type ToolTipProvider interface {
+	MakeToolTippable(fyne.Widget, func() string) fyne.Widget
+}
+
 type Controller struct {
-	AppVersion  string
-	MainWindow  fyne.Window
-	App         *backend.App
-	NavHandler  NavigationHandler
+	AppVersion      string
+	MainWindow      fyne.Window
+	App             *backend.App
+	NavHandler      NavigationHandler
+	ToolTipProvider ToolTipProvider
+
 	CurPageFunc CurPageFunc
 	ReloadFunc  ReloadFunc
 

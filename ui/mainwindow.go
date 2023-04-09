@@ -7,6 +7,7 @@ import (
 	"supersonic/ui/browsing"
 	"supersonic/ui/controller"
 	"supersonic/ui/os"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -34,11 +35,12 @@ var (
 type MainWindow struct {
 	Window fyne.Window
 
-	App          *backend.App
-	Router       browsing.Router
-	Controller   *controller.Controller
-	BrowsingPane *browsing.BrowsingPane
-	BottomPanel  *BottomPanel
+	App             *backend.App
+	Router          browsing.Router
+	Controller      *controller.Controller
+	BrowsingPane    *browsing.BrowsingPane
+	BottomPanel     *BottomPanel
+	ToolTipProvider *ToolTipProvider
 
 	haveSystemTray bool
 	container      *fyne.Container
@@ -50,19 +52,24 @@ var (
 
 func NewMainWindow(fyneApp fyne.App, appName, appVersion string, app *backend.App, size fyne.Size) MainWindow {
 	m := MainWindow{
-		App:          app,
-		Window:       fyneApp.NewWindow(appName),
-		BrowsingPane: browsing.NewBrowsingPane(app),
+		App:             app,
+		Window:          fyneApp.NewWindow(appName),
+		ToolTipProvider: NewToolTipProvider(),
 	}
+	m.ToolTipProvider.BetweenToolTipTime = 800 * time.Millisecond
+	m.ToolTipProvider.InitialToolTipDelay = 1200 * time.Millisecond
+	m.ToolTipProvider.SubsequentToolTipDelay = 200 * time.Millisecond
 
 	if app.Config.Application.EnableSystemTray {
 		m.SetupSystemTrayMenu(appName, fyneApp)
 	}
 	m.Controller = &controller.Controller{
-		AppVersion: appVersion,
-		MainWindow: m.Window,
-		App:        app,
+		AppVersion:      appVersion,
+		MainWindow:      m.Window,
+		App:             app,
+		ToolTipProvider: m.ToolTipProvider,
 	}
+	m.BrowsingPane = browsing.NewBrowsingPane(app, m.Controller)
 	m.Router = browsing.NewRouter(app, m.Controller, m.BrowsingPane)
 	// inject controller dependencies
 	m.Controller.NavHandler = m.Router.NavigateTo
@@ -72,7 +79,9 @@ func NewMainWindow(fyneApp fyne.App, appName, appVersion string, app *backend.Ap
 	m.BottomPanel = NewBottomPanel(app.Player, m.Router.NavigateTo)
 	m.BottomPanel.SetPlaybackManager(app.PlaybackManager)
 	m.BottomPanel.ImageManager = app.ImageManager
-	m.container = container.NewBorder(nil, m.BottomPanel, nil, nil, m.BrowsingPane)
+	m.container = container.NewMax(
+		container.NewBorder(nil, m.BottomPanel, nil, nil, m.BrowsingPane),
+		m.ToolTipProvider.ToolTipLayer())
 	m.Window.SetContent(m.container)
 	m.Window.Resize(size)
 	app.PlaybackManager.OnSongChange(func(song *subsonic.Child, _ *subsonic.Child) {

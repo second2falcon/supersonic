@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/dweymouth/supersonic/backend/mediaprovider"
@@ -44,6 +45,7 @@ type PlaybackManager struct {
 	playQueue     []*mediaprovider.Track
 	nowPlayingIdx int
 	loopMode      LoopMode
+	shuffle       bool
 
 	// to pass to onSongChange listeners; clear once listeners have been called
 	lastScrobbled *mediaprovider.Track
@@ -55,6 +57,7 @@ type PlaybackManager struct {
 	onSongChange     []func(nowPlaying, justScrobbledIfAny *mediaprovider.Track)
 	onPlayTimeUpdate []func(float64, float64)
 	onLoopModeChange []func(LoopMode)
+	onShuffleChange  []func(bool)
 	onVolumeChange   []func(int)
 	onSeek           []func()
 	onPaused         []func()
@@ -147,6 +150,11 @@ func (p *PlaybackManager) OnPlayTimeUpdate(cb func(float64, float64)) {
 // Registers a callback that is notified whenever the loop mode changes.
 func (p *PlaybackManager) OnLoopModeChange(cb func(LoopMode)) {
 	p.onLoopModeChange = append(p.onLoopModeChange, cb)
+}
+
+// Registers a callback that is notified whenever the loop mode changes.
+func (p *PlaybackManager) OnShuffleModeChange(cb func(bool)) {
+	p.onShuffleChange = append(p.onShuffleChange, cb)
 }
 
 // Registers a callback that is notified whenever the volume changes.
@@ -427,6 +435,25 @@ func (p *PlaybackManager) SetLoopMode(loopMode LoopMode) {
 	}
 }
 
+func (p *PlaybackManager) ToggleShuffle() {
+	p.SetShuffle(!p.shuffle)
+}
+
+func (p *PlaybackManager) SetShuffle(shuffle bool) {
+	old := p.shuffle
+	p.shuffle = shuffle
+	if p.shuffle != old {
+		p.setNextTrackBasedOnLoopMode(false)
+		for _, cb := range p.onShuffleChange {
+			cb(shuffle)
+		}
+	}
+}
+
+func (p *PlaybackManager) IsShuffle() bool {
+	return p.shuffle
+}
+
 func (p *PlaybackManager) GetLoopMode() LoopMode {
 	return p.loopMode
 }
@@ -454,14 +481,22 @@ func (p *PlaybackManager) SeekNext() error {
 	if p.CurrentPlayer().GetStatus().State == player.Stopped {
 		return nil
 	}
-	return p.PlayTrackAt(p.nowPlayingIdx + 1)
+	idx := p.nowPlayingIdx + 1
+	if p.shuffle {
+		idx = rand.Intn(len(p.playQueue))
+	}
+	return p.PlayTrackAt(idx)
 }
 
 func (p *PlaybackManager) SeekBackOrPrevious() error {
 	if p.nowPlayingIdx == 0 || p.player.GetStatus().TimePos > 3 {
 		return p.player.SeekSeconds(0)
 	}
-	return p.PlayTrackAt(p.nowPlayingIdx - 1)
+	idx := p.nowPlayingIdx - 1
+	if p.shuffle {
+		idx = rand.Intn(len(p.playQueue))
+	}
+	return p.PlayTrackAt(idx)
 }
 
 // Seek to given absolute position in the current track by seconds.
@@ -557,6 +592,10 @@ func (p *PlaybackManager) setNextTrackBasedOnLoopMode(onLoopModeChange bool) {
 }
 
 func (p *PlaybackManager) setTrack(idx int, next bool) error {
+	if idx >= 0 && p.shuffle && next {
+		// choose random track instead
+		idx = rand.Intn(len(p.playQueue))
+	}
 	if urlP, ok := p.player.(player.URLPlayer); ok {
 		url := ""
 		if idx >= 0 {

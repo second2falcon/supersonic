@@ -95,13 +95,13 @@ func NewBottomPanel(pm *backend.PlaybackManager, contr *controller.Controller) *
 
 	bp.AuxControls = widgets.NewAuxControls(pm.Volume())
 	pm.OnLoopModeChange(bp.AuxControls.SetLoopMode)
+	pm.OnShuffleModeChange(bp.AuxControls.SetShuffle)
 	pm.OnVolumeChange(bp.AuxControls.VolumeControl.SetVolume)
 	bp.AuxControls.VolumeControl.OnSetVolume = func(v int) {
 		_ = pm.SetVolume(v)
 	}
-	bp.AuxControls.OnChangeLoopMode(func() {
-		pm.SetNextLoopMode()
-	})
+	bp.AuxControls.OnChangeLoopMode(pm.SetNextLoopMode)
+	bp.AuxControls.OnChangeShuffleMode(pm.ToggleShuffle)
 
 	bp.container = container.New(layouts.NewLeftMiddleRightLayout(500),
 		bp.NowPlaying, bp.Controls, bp.AuxControls)

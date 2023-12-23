@@ -19,6 +19,7 @@ type AuxControls struct {
 
 	VolumeControl *VolumeControl
 	loop          *miniButton
+	shuffle       *miniButton
 
 	container *fyne.Container
 }
@@ -45,13 +46,14 @@ func NewAuxControls(initialVolume int) *AuxControls {
 	a := &AuxControls{
 		VolumeControl: NewVolumeControl(initialVolume),
 		loop:          newMiniButton(myTheme.RepeatIcon),
+		shuffle:       newMiniButton(myTheme.ShuffleIcon),
 	}
 	a.container = container.NewHBox(
 		layout.NewSpacer(),
 		container.NewVBox(
 			layout.NewSpacer(),
 			a.VolumeControl,
-			container.NewHBox(layout.NewSpacer(), a.loop, util.NewHSpace(5)),
+			container.NewHBox(layout.NewSpacer(), a.loop, a.shuffle, util.NewHSpace(5)),
 			layout.NewSpacer(),
 		),
 	)
@@ -67,6 +69,10 @@ func (a *AuxControls) OnChangeLoopMode(f func()) {
 	a.loop.OnTapped = f
 }
 
+func (a *AuxControls) OnChangeShuffleMode(f func()) {
+	a.shuffle.OnTapped = f
+}
+
 func (a *AuxControls) SetLoopMode(mode backend.LoopMode) {
 	switch mode {
 	case backend.LoopAll:
@@ -80,6 +86,15 @@ func (a *AuxControls) SetLoopMode(mode backend.LoopMode) {
 		a.loop.Icon = myTheme.RepeatIcon
 	}
 	a.loop.Refresh()
+}
+
+func (a *AuxControls) SetShuffle(s bool) {
+	if s {
+		a.shuffle.Importance = widget.HighImportance
+	} else {
+		a.shuffle.Importance = widget.MediumImportance
+	}
+	a.shuffle.Refresh()
 }
 
 type volumeSlider struct {
